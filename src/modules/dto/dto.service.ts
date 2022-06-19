@@ -4,27 +4,36 @@ import EventEmitter = require('events');
 import { FindOptions, Transaction, WhereOptions } from 'sequelize';
 import { Model, Sequelize } from 'sequelize-typescript';
 
+import { CustomException } from 'src/classes/exceptions/CustomException';
 import { logSection } from 'src/utils';
 import { inTransaction } from 'src/utils/sequelize';
 
 export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
+  protected readonly logger: Logger;
+
   constructor(
     protected readonly sequelize: Sequelize,
     protected readonly model: { new(): T } & typeof Model, // eslint-disable-line prettier/prettier
     protected readonly deleteMode: 'deletedAt' | 'destroy' = 'destroy',
-    protected readonly logger?: Logger,
+    logger?: Logger,
   ) {
     super();
-    this.logger = new Logger(this.constructor.name);
-    this.on('beforeCreate', (i) =>
-      this.logger.debug(`[create] ${this.toString(i)}`),
-    );
-    this.on('beforeUpdate', (i) =>
-      this.logger.debug(`[update] ${this.toString(i)}`),
-    );
-    this.on('beforeDestroy', (i) =>
-      this.logger.debug(`[destroy] ${this.toString(i)}`),
-    );
+    this.logger = logger || new Logger(this.constructor.name);
+    this.on('beforeCreate', (instances) => {
+      for (const i of instances) {
+        this.logger.debug(`[create] ${this.toString(i)}`);
+      }
+    });
+    this.on('beforeUpdate', (instances) => {
+      for (const i of instances) {
+        this.logger.debug(`[update] ${this.toString(i)}`);
+      }
+    });
+    this.on('beforeDestroy', (instances) => {
+      for (const i of instances) {
+        this.logger.debug(`[destroy] ${this.toString(i)}`);
+      }
+    });
   }
 
   /* eslint-disable @typescript-eslint/no-unused-vars */
@@ -63,21 +72,64 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
 
   public on(
     event: 'beforeSave',
-    callback: (type: 'create' | 'update', instance: T) => void,
+    callback: (
+      type: 'create' | 'update',
+      instances: T[],
+    ) => void | Promise<void>,
   );
   public on(
     event: 'afterSave',
-    callback: (type: 'create' | 'update', instance: T, created?: T) => void,
+    callback: (
+      type: 'create' | 'update',
+      instances: T[],
+      created?: T[],
+    ) => void | Promise<void>,
   );
-  public on(event: 'beforeCreate', callback: (instance: T) => void);
-  public on(event: 'afterCreate', callback: (instance: T, created?: T) => void);
-  public on(event: 'beforeUpdate', callback: (instance: T) => void);
-  public on(event: 'afterUpdate', callback: (instance: T) => void);
-  public on(event: 'beforeDestroy', callback: (instance: T) => void);
-  public on(event: 'afterDestroy', callback: (instance: T) => void);
-  public on(event: string, callback: (...args: any[]) => void) {
+  public on(
+    event: 'beforeCreate',
+    callback: (instances: T[]) => void | Promise<void>,
+  );
+  public on(
+    event: 'afterCreate',
+    callback: (instances: T[], created?: T[]) => void | Promise<void>,
+  );
+  public on(
+    event: 'afterFind',
+    callback: (instances: T[]) => void | Promise<void>,
+  );
+  public on(
+    event: 'beforeUpdate',
+    callback: (instances: T[]) => void | Promise<void>,
+  );
+  public on(
+    event: 'afterUpdate',
+    callback: (instances: T[]) => void | Promise<void>,
+  );
+  public on(
+    event: 'beforeDestroy',
+    callback: (instances: T[]) => void | Promise<void>,
+  );
+  public on(
+    event: 'afterDestroy',
+    callback: (instances: T[]) => void | Promise<void>,
+  );
+  public on(event: string, callback: (...args: any[]) => void | Promise<void>) {
     super.on(event, callback);
     return this;
+  }
+
+  public getPrimaryKey(instance: T) {
+    let id: ID | undefined = instance.id;
+    if (!id) {
+      id =
+        (typeof instance.getDataValue === 'function' &&
+          instance.getDataValue('id')) ||
+        undefined;
+    }
+    if (!id) {
+      id = instance['dataValues']?.id;
+    }
+    return id;
   }
 
   /**
@@ -132,22 +184,16 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
       }
 
       // create
-      for (const instance of instances) {
-        this.emit('beforeSave', 'create', instance);
-        this.emit('beforeCreate', instance);
-      }
+      await this.emit('beforeSave', 'create', instances);
+      await this.emit('beforeCreate', instances);
       const result = (await this.model.bulkCreate(instances, {
         transaction,
       })) as unknown as T[];
       for (let i = 0, length = instances.length; i < length; i += 1) {
         Object.assign(result[i], instances[i]);
       }
-      for (let i = 0, length = instances.length; i < length; i += 1) {
-        const instance = instances[i];
-        const created = result[i];
-        this.emit('afterSave', 'create', instance, created);
-        this.emit('afterCreate', instance, created);
-      }
+      await this.emit('afterSave', 'create', instances, result);
+      await this.emit('afterCreate', instances, result);
 
       // create relationships
       await logSection(this.logger, 'createRelationships', () => {
@@ -156,13 +202,21 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
 
       // find
       if (isSingle) {
-        return options
-          ? this.findById(result[0].id, transaction, options)
-          : result[0];
+        if (options) {
+          return this.findById(
+            this.getPrimaryKey(result[0]) as ID,
+            transaction,
+            options,
+          );
+        } else {
+          return result[0];
+        }
       } else if (options) {
         return this.find(
           {
-            where: { id: result.map((i) => i.id) } as WhereOptions<T>,
+            where: {
+              id: result.map((i) => this.getPrimaryKey(i)),
+            } as WhereOptions<T>,
             ...(options || {}),
           },
           transaction,
@@ -192,7 +246,9 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
     } else {
       options.transaction = transaction;
       const model_ = scope ? this.model.scope(scope) : this.model;
-      return (await model_.findAll(options)) as unknown as T[];
+      const result = (await model_.findAll(options)) as unknown as T[];
+      if (result.length) await this.emit('afterFind', result);
+      return result;
     }
   }
 
@@ -215,7 +271,9 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
     } else {
       options.transaction = transaction;
       const model_ = scope ? this.model.scope(scope) : this.model;
-      return (await model_.findOne(options)) as T;
+      const result = (await model_.findOne(options)) as T;
+      if (result) await this.emit('afterFind', [result]);
+      return result;
     }
   }
 
@@ -255,7 +313,9 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
         id,
       } as WhereOptions<T>);
       options.transaction = options.transaction || transaction;
-      return (await model_.findOne(options)) as T;
+      const result = (await model_.findOne(options)) as T;
+      if (result) await this.emit('afterFind', [result]);
+      return result;
     }
   }
 
@@ -288,58 +348,66 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
       if (!instances.length) return [];
 
       // create or update (note no delete)
-      const newInstances = instances.filter((i) => !i.id);
-      const existingInst = instances.filter((i) => i.id);
+      const newInstances = instances.filter((i) => !this.getPrimaryKey(i));
+      const existingInst = instances.filter((i) => this.getPrimaryKey(i));
 
       // assign updatedAt
       for (const instance of existingInst) {
         instance['updatedAt'] = new Date();
       }
 
-      await Promise.all([
+      if (existingInst.length) {
+        await this.emit('beforeSave', 'update', existingInst);
+        await this.emit('beforeUpdate', existingInst);
+      }
+      const [created] = await Promise.all([
         this.create(newInstances, transaction),
-        ...existingInst.map((i) => {
-          this.emit('beforeSave', 'update', i);
-          this.emit('beforeUpdate', i);
-          const result = this.model.update(i, {
-            where: { id: i.id } as WhereOptions<T>,
-            transaction,
-          });
-          this.emit('afterSave', 'update', i);
-          this.emit('afterUpdate', i);
-          return result;
-        }),
+        ...existingInst.map(
+          async (i) =>
+            await this.model.update(i, {
+              where: { id: this.getPrimaryKey(i) } as WhereOptions<T>,
+              transaction,
+            }),
+        ),
       ]);
+      if (existingInst.length) {
+        await this.emit('afterSave', 'update', existingInst);
+        await this.emit('afterUpdate', existingInst);
 
-      // update relationships
-      await logSection(this.logger, 'updateRelationships', () =>
-        this.updateRelationships(existingInst, transaction),
-      );
+        // update relationships
+        await logSection(this.logger, 'updateRelationships', () =>
+          this.updateRelationships(existingInst, transaction),
+        );
+      }
 
       return this.find(
-        { where: { id: existingInst.map((i) => i.id) } as WhereOptions<T> },
+        {
+          where: {
+            id: [...created, ...existingInst].map((i) => this.getPrimaryKey(i)),
+          } as WhereOptions<T>,
+        },
         transaction,
       );
-    } else if (!instances.id) {
+    } else if (!this.getPrimaryKey(instances)) {
       return this.create(instances, transaction);
     } else {
       instances['updatedAt'] = new Date();
 
-      this.emit('beforeSave', 'update', instances);
-      this.emit('beforeUpdate', instances);
+      await this.emit('beforeSave', 'update', [instances]);
+      await this.emit('beforeUpdate', [instances]);
       await this.model.update(instances, {
-        where: { id: instances.id } as WhereOptions<T>,
+        where: { id: this.getPrimaryKey(instances) } as WhereOptions<T>,
         transaction,
       });
-      this.emit('afterSave', 'update', instances);
-      this.emit('afterUpdate', instances);
+      await this.emit('afterSave', 'update', [instances]);
+      await this.emit('afterUpdate', [instances]);
 
       // update relationships
       await logSection(this.logger, 'updateRelationships', () =>
         this.updateRelationships([instances], transaction),
       );
 
-      return this.findById(instances.id, transaction);
+      return this.findById(this.getPrimaryKey(instances), transaction);
     }
   }
 
@@ -360,7 +428,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
       const targets = await this.find(
         {
           where: {
-            id: instances.map((i) => i.id).filter((id) => id),
+            id: instances.map((i) => this.getPrimaryKey(i)).filter((id) => id),
           } as WhereOptions<T>,
         },
         transaction,
@@ -370,34 +438,36 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
       }
 
       if (this.deleteMode === 'deletedAt') {
-        await Promise.all(
-          instances.map((i) => {
-            this.emit('beforeDestroy', i);
-            const result = this.model.update(i, {
-              where: { id: i.id } as WhereOptions<T>,
-              transaction,
-            });
-            this.emit('afterDestroy', i);
-            return result;
-          }),
-        );
-      } else {
-        for (const instance of instances) {
-          this.emit('beforeDestroy', instance);
+        if (instances.length) {
+          await this.emit('beforeDestroy', instances);
+          await Promise.all(
+            instances.map(
+              async (i) =>
+                await this.model.update(i, {
+                  where: { id: this.getPrimaryKey(i) } as WhereOptions<T>,
+                  transaction,
+                }),
+            ),
+          );
+          await this.emit('afterDestroy', instances);
         }
+      } else if (instances.length) {
+        await this.emit('beforeDestroy', instances);
         await this.model.destroy({
-          where: { id: targets.map((i) => i.id) } as WhereOptions<T>,
+          where: {
+            id: targets.map((i) => this.getPrimaryKey(i)),
+          } as WhereOptions<T>,
           transaction,
         });
-        for (const instance of instances) {
-          this.emit('afterDestroy', instance);
-        }
+        await this.emit('afterDestroy', instances);
       }
 
-      // delete relationships
-      await logSection(this.logger, 'deleteRelationships', () =>
-        this.deleteRelationships(instances, transaction),
-      );
+      if (instances.length) {
+        // delete relationships
+        await logSection(this.logger, 'deleteRelationships', () =>
+          this.deleteRelationships(instances, transaction),
+        );
+      }
 
       return this.deleteMode === 'deletedAt' ? instances : targets;
     }
@@ -416,9 +486,16 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
       );
     } else {
       const target = await this.findById(id, transaction);
+      if (!target) {
+        CustomException.throw(
+          `${this.constructor.name}.deleteById`,
+          CustomException.exceptions.SQL_ERROR,
+        );
+      }
+
       target['deletedAt'] = new Date();
 
-      this.emit('beforeDestroy', target);
+      await this.emit('beforeDestroy', [target]);
       if (this.deleteMode === 'deletedAt') {
         await this.model.update(target, {
           where: { id } as WhereOptions<T>,
@@ -430,7 +507,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
           transaction,
         });
       }
-      this.emit('afterDestroy', target);
+      await this.emit('afterDestroy', [target]);
 
       // delete relationships
       await logSection(this.logger, 'deleteRelationships', () =>
