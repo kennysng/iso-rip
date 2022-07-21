@@ -15,10 +15,11 @@ import { ConfigModule } from './config.module';
 import { ConfigService } from './config.service';
 import middlewares from './middlewares';
 import models from './models';
+import { ModelModule } from './modules/model/index.module';
 
 const sequelizeLogger = new Logger('Sequelize', { timestamp: true });
 
-const modules = [];
+const modules = [ModelModule];
 
 @Module({
   imports: [

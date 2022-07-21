@@ -2,6 +2,10 @@ export abstract class IConfig {
   port?: number;
   cluster?: boolean | number;
 
+  album: {
+    path?: string;
+  },
+
   mysql: {
     host?: string;
     port?: number;
