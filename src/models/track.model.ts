@@ -24,19 +24,19 @@ export class Track extends Model {
   @Column(DataType.BIGINT)
   cdId: number;
 
-  @Column(DataType.SMALLINT)
   @Default(1)
+  @Column(DataType.SMALLINT)
   trackNum: number;
 
   @Column(DataType.STRING(256))
   name: string;
 
-  @Column(DataType.ARRAY(DataType.STRING))
   @Default([])
+  @Column(DataType.ARRAY(DataType.STRING))
   performer: string[];
 
-  @Column(DataType.ARRAY(DataType.STRING))
   @Default([])
+  @Column(DataType.ARRAY(DataType.STRING))
   author: string[];
 
   // #region relationships

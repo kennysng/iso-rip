@@ -31,16 +31,16 @@ export class Album extends Model {
   @Column(DataType.STRING(256))
   type: string;
 
-  @Column(DataType.ARRAY(DataType.STRING))
   @Default([])
+  @Column(DataType.ARRAY(DataType.STRING))
   performer: string[];
 
-  @Column(DataType.ARRAY(DataType.STRING))
   @Default([])
+  @Column(DataType.ARRAY(DataType.STRING))
   author: string[];
 
-  @Column(DataType.BOOLEAN)
   @Default(false)
+  @Column(DataType.BOOLEAN)
   rescan: boolean;
 
   @AllowNull(false)

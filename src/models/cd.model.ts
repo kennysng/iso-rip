@@ -24,8 +24,8 @@ export class CD extends Model {
   @Column(DataType.BIGINT)
   albumId: number;
 
-  @Column(DataType.SMALLINT)
   @Default(1)
+  @Column(DataType.SMALLINT)
   cdNum: number;
 
   @Column(DataType.STRING(256))

@@ -4,7 +4,7 @@ export abstract class IConfig {
 
   album: {
     path?: string;
-  },
+  };
 
   mysql: {
     host?: string;

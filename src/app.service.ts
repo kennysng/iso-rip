@@ -3,13 +3,13 @@ import { Cron } from '@nestjs/schedule';
 import { lstat, readdir } from 'fs/promises';
 import { basename, extname, resolve } from 'path';
 import { ConfigService } from './config.service';
+import { Logger } from './logger';
 import { Album } from './models/album.model';
 import { CD } from './models/cd.model';
 import { TaskStatus } from './models/task.model';
 import { Track } from './models/track.model';
-import { AlbumService } from './modules/model/album.service';
-import { LogService } from './modules/model/log.service';
-import { TaskService } from './modules/model/task.service';
+import { AlbumDtoService } from './modules/dto/album.service';
+import { TaskDtoService } from './modules/dto/task.service';
 
 @Injectable()
 export class AppService {
@@ -22,11 +22,12 @@ export class AppService {
   // ripping audio tracks
   private isRipping = false;
 
+  private readonly logger = new Logger('AppService');
+
   constructor(
-    private readonly configService: ConfigService,
-    private readonly albumService: AlbumService,
-    private readonly logger: LogService,
-    private readonly taskService: TaskService,
+    private readonly config: ConfigService,
+    private readonly albumDtoService: AlbumDtoService,
+    private readonly taskDtoService: TaskDtoService,
   ) {}
 
   @Cron('0 0 * * *')
@@ -36,20 +37,19 @@ export class AppService {
         this.isScanning = true;
 
         // read albums
-        const albumsPath =
-          this.configService.album?.path || resolve('..', 'album');
+        const albumsPath = this.config.album?.path || resolve('..', 'album');
         let albums: string[];
         try {
           albums = await readdir(albumsPath);
         } catch (e) {
-          this.logger.log('AppService', 'Album folder not found');
+          this.logger.log('Album folder not found', 'scheduleScan');
           return;
         }
 
         const result: Album[] = [];
         for (const albumName of albums) {
           try {
-            let album = await this.albumService.findOne({
+            let album = await this.albumDtoService.findOne({
               where: { name: albumName },
             });
             if (album && !album.rescan) continue;
@@ -81,11 +81,14 @@ export class AppService {
 
             result.push(album);
           } catch (e) {
-            this.logger.error('AppService', e.message, e.stack);
+            this.logger.error(e.message, {
+              tag: 'scheduleScan',
+              extra: e.stack,
+            });
           }
         }
 
-        await this.albumService.update(result);
+        await this.albumDtoService.update(result);
       } finally {
         this.isScanning = false;
       }
@@ -114,7 +117,7 @@ export class AppService {
         this.isRipping = true;
 
         while (true) {
-          const pending = await this.taskService.findOne({
+          const pending = await this.taskDtoService.findOne({
             where: { status: TaskStatus.pending },
             include: [Album, CD, Track],
           });

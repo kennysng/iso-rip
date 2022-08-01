@@ -31,10 +31,10 @@ export class Task extends Model {
   @Column(DataType.BIGINT)
   albumId: number;
 
+  @Default('pending')
   @Column(
     DataType.ENUM('pending', 'running', 'completed', 'failed', 'canceled'),
   )
-  @Default('pending')
   status: TaskStatus;
 
   @AllowNull(false)
