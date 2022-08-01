@@ -1,12 +1,23 @@
-import type { ArgumentsHost, ExceptionFilter } from '@nestjs/common';
+import type {
+  ArgumentsHost,
+  ExceptionFilter,
+  LoggerService,
+} from '@nestjs/common';
+import type { Response } from 'express';
 
-import { Catch, HttpException, Logger } from '@nestjs/common';
-import { Response } from 'express';
+import { Catch, HttpException } from '@nestjs/common';
 
-const logger = new Logger('Exception');
+import { Logger } from 'src/logger';
 
 @Catch(HttpException)
 export class HttpExceptionFilter implements ExceptionFilter {
+  protected readonly logger: LoggerService;
+
+  constructor() {
+    this.logger = new Logger('HttpException');
+  }
+
+  // @override
   catch(exception: HttpException, host: ArgumentsHost) {
     if (process.env.NODE_ENV !== 'production') {
       const ctx = host.switchToHttp();
@@ -22,7 +33,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
         stack = `${message}\n${stack}`;
       }
 
-      if (stack) logger.error(stack);
+      if (stack) this.logger.error(stack);
 
       response.status(status).send({
         statusCode: status,

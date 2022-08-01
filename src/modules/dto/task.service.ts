@@ -5,9 +5,9 @@ import { Task } from 'src/models/task.model';
 import { BaseDtoService } from '../dto/dto.service';
 
 @Injectable()
-export class TaskService extends BaseDtoService<Task> {
+export class TaskDtoService extends BaseDtoService<Task> {
   constructor(sequelize: Sequelize, @InjectModel(Task) model: typeof Task) {
-    super(sequelize, model, [], 'destroy');
+    super(sequelize, model, { deleteMode: 'destroy' });
   }
 
   // @override

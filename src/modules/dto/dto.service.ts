@@ -1,38 +1,56 @@
-import { HttpStatus, Logger } from '@nestjs/common';
+import type { LoggerService } from '@nestjs/common';
+import type {
+  FindOptions,
+  Includeable,
+  Transaction,
+  WhereOptions,
+} from 'sequelize';
+import type { Model, Sequelize } from 'sequelize-typescript';
+
+import { HttpStatus } from '@nestjs/common';
 import deepmerge = require('deepmerge');
 import EventEmitter = require('events');
-import { FindOptions, Includeable, Transaction, WhereOptions } from 'sequelize';
-import { Model, Sequelize } from 'sequelize-typescript';
 
 import { CustomException } from 'src/classes/exceptions/CustomException';
 import { logSection } from 'src/utils';
 import { inTransaction } from 'src/utils/sequelize';
+import { Logger as GoenLogger } from '../../logger';
+
+export type Options = {
+  logger?: LoggerService;
+  defaultInclude?: Includeable[];
+  deleteMode?: 'deletedAt' | 'destroy';
+};
 
 export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
-  protected readonly logger: Logger;
+  protected readonly logger: LoggerService;
+  protected readonly defaultInclude: Includeable[];
+  protected readonly deleteMode: 'deletedAt' | 'destroy';
 
   constructor(
     protected readonly sequelize: Sequelize,
-    protected readonly model: { new(): T } & typeof Model, // eslint-disable-line prettier/prettier
-    protected readonly defaultInclude: Includeable[] = [],
-    protected readonly deleteMode: 'deletedAt' | 'destroy' = 'destroy',
-    logger?: Logger,
+    protected readonly model: { new (): T } & typeof Model, // eslint-disable-line prettier/prettier
+    options?: Options,
   ) {
     super();
-    this.logger = logger || new Logger(this.constructor.name);
+
+    this.logger = options?.logger || new GoenLogger(this.constructor.name);
+    this.defaultInclude = options?.defaultInclude || [];
+    this.deleteMode = options?.deleteMode || 'deletedAt';
+
     this.on('beforeCreate', (instances) => {
       for (const i of instances) {
-        this.logger.debug(`[create] ${this.toString(i)}`);
+        this.logger.debug(`.create ${this.toString(i)}`);
       }
     });
     this.on('beforeUpdate', (instances) => {
       for (const i of instances) {
-        this.logger.debug(`[update] ${this.toString(i)}`);
+        this.logger.debug(`.update ${this.toString(i)}`);
       }
     });
     this.on('beforeDestroy', (instances) => {
       for (const i of instances) {
-        this.logger.debug(`[destroy] ${this.toString(i)}`);
+        this.logger.debug(`.destroy ${this.toString(i)}`);
       }
     });
   }
@@ -133,6 +151,13 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
     return id;
   }
 
+  public inTransaction<T>(
+    callback: (transaction: Transaction) => Promise<T>,
+    transaction?: Transaction,
+  ): Promise<T> {
+    return inTransaction(this.sequelize, callback, transaction);
+  }
+
   /**
    * create instance
    * @param instance Partial<T>
@@ -163,7 +188,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
     options?: FindOptions<T>,
   ): Promise<T | T[]> {
     if (!transaction) {
-      return inTransaction(this.sequelize, async (transaction) =>
+      return this.inTransaction(async (transaction) =>
         Array.isArray(instances)
           ? this.create(instances, transaction, options)
           : this.create(instances, transaction, options),
@@ -247,7 +272,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
     scope?: string,
   ): Promise<T[]> {
     if (!transaction) {
-      return inTransaction(this.sequelize, (transaction) =>
+      return this.inTransaction((transaction) =>
         this.find(options, transaction, scope),
       );
     } else {
@@ -273,7 +298,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
     scope?: string,
   ): Promise<T> {
     if (!transaction) {
-      return inTransaction(this.sequelize, (transaction) =>
+      return this.inTransaction((transaction) =>
         this.findOne(options, transaction, scope),
       );
     } else {
@@ -306,7 +331,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
     optionsOrScope?: FindOptions<T> | string,
   ): Promise<T> {
     if (!transaction) {
-      return inTransaction(this.sequelize, (transaction) =>
+      return this.inTransaction((transaction) =>
         typeof optionsOrScope === 'string'
           ? this.findById(id, transaction, optionsOrScope)
           : this.findById(id, transaction, optionsOrScope),
@@ -354,7 +379,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
     transaction?: Transaction,
   ): Promise<T | T[]> {
     if (!transaction) {
-      return inTransaction(this.sequelize, async (transaction) =>
+      return this.inTransaction(async (transaction) =>
         Array.isArray(instances)
           ? this.update(instances, transaction)
           : this.update(instances, transaction),
@@ -435,7 +460,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
    */
   async delete(instances: T[], transaction?: Transaction): Promise<T[]> {
     if (!transaction) {
-      return inTransaction(this.sequelize, (transaction) =>
+      return this.inTransaction((transaction) =>
         this.delete(instances, transaction),
       );
     } else if (!instances.length) {
@@ -497,7 +522,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
    */
   async deleteById(id: ID, transaction?: Transaction): Promise<T> {
     if (!transaction) {
-      return inTransaction(this.sequelize, (transaction) =>
+      return this.inTransaction((transaction) =>
         this.deleteById(id, transaction),
       );
     } else {
