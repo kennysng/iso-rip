@@ -16,9 +16,6 @@ export class AppService {
   // scanning for albums
   private isScanning = false;
 
-  // converting mdx to iso
-  private isConverting = false;
-
   // ripping audio tracks
   private isRipping = false;
 
@@ -68,14 +65,13 @@ export class AppService {
               // check if is file
               const cdPath = await resolve(albumPath, cdName);
               const ext = extname(cdPath);
-              if (['.iso', '.mdx'].indexOf(ext) === -1) continue;
+              if (['.mdx'].indexOf(ext) === -1) continue;
               const stat = await lstat(cdPath);
               if (!stat.isFile()) continue;
 
               album.cds.push({
                 name: basename(cdName, extname(cdName)),
                 cdNum: i + 1,
-                needConvert: ext === '.mdx',
               } as CD);
             }
 
@@ -91,21 +87,6 @@ export class AppService {
         await this.albumDtoService.update(result);
       } finally {
         this.isScanning = false;
-      }
-    }
-  }
-
-  @Cron('0 0 * * *')
-  async scheduleConvert() {
-    if (!this.isConverting) {
-      try {
-        this.isConverting = true;
-
-        while (true) {
-          // TODO get needConvert CD
-        }
-      } finally {
-        this.isConverting = false;
       }
     }
   }

@@ -20,4 +20,9 @@ export abstract class IConfig {
     host?: string;
     port?: number;
   };
+
+  path?: {
+    daemonTools?: string;
+    abcmd?: string;
+  };
 }

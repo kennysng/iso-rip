@@ -26,6 +26,13 @@
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
+## Server Prerequisite
+Here is the script example on Windows.
+
+1. Daemon Tools Lite, or Pro etc.
+
+2. AnyBurn
+
 ## Installation
 
 ```bash

@@ -31,9 +31,6 @@ export class CD extends Model {
   @Column(DataType.STRING(256))
   name: string;
 
-  @Column(DataType.BOOLEAN)
-  needConvert: boolean;
-
   // #region relationships
 
   @BelongsTo(() => Album, {
