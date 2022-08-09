@@ -4,10 +4,10 @@ import { Sequelize } from 'sequelize-typescript';
 
 import { Logger } from 'src/logger';
 import { Log } from 'src/models/log.model';
-import { BaseDtoService } from './dto.service';
+import { BaseDaoService } from './dao.service';
 
 @Injectable()
-export class LogDtoService extends BaseDtoService<Log> {
+export class LogDaoService extends BaseDaoService<Log> {
   constructor(
     @Inject(forwardRef(() => Sequelize)) sequelize: Sequelize,
     @InjectModel(Log) model: typeof Log,

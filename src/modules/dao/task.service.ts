@@ -2,10 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import { Sequelize } from 'sequelize-typescript';
 import { Task } from 'src/models/task.model';
-import { BaseDtoService } from '../dto/dto.service';
+import { BaseDaoService } from '../dao/dao.service';
 
 @Injectable()
-export class TaskDtoService extends BaseDtoService<Task> {
+export class TaskDaoService extends BaseDaoService<Task> {
   constructor(sequelize: Sequelize, @InjectModel(Task) model: typeof Task) {
     super(sequelize, model, { deleteMode: 'destroy' });
   }

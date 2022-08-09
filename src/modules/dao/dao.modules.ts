@@ -5,11 +5,11 @@ import { ConfigModule } from 'src/config.module';
 import { ConfigService } from 'src/config.service';
 import { Logger } from 'src/logger';
 import models from '../../models';
-import { AlbumDtoService } from './album.service';
-import { LogDtoService } from './log.service';
-import { TaskDtoService } from './task.service';
+import { AlbumDaoService } from './album.service';
+import { LogDaoService } from './log.service';
+import { TaskDaoService } from './task.service';
 
-const services = [AlbumDtoService, LogDtoService, TaskDtoService];
+const services = [AlbumDaoService, LogDaoService, TaskDaoService];
 
 @Module({
   imports: [

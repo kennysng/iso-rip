@@ -12,7 +12,7 @@ import { AppController } from './app.controller';
 import { ConfigModule } from './config.module';
 import { ConfigService } from './config.service';
 import middlewares from './middlewares';
-import { DatabaseModule } from './modules/dto/dto.modules';
+import { DatabaseModule } from './modules/dao/dao.modules';
 
 const modules = [];
 

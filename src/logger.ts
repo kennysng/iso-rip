@@ -1,4 +1,4 @@
-import type { LogDtoService } from './modules/dto/log.service';
+import type { LogDaoService } from './modules/dao/log.service';
 import type { LoggerService } from '@nestjs/common';
 
 import colors = require('colors');
@@ -21,12 +21,12 @@ const colorMapping = {
 };
 
 export class Logger implements LoggerService {
-  private static logService: LogDtoService;
+  private static logService: LogDaoService;
   private static timeout: NodeJS.Timeout | undefined;
   private static queue: Partial<Log>[] = [];
   private static timestamp = Date.now();
 
-  static init(logService: LogDtoService) {
+  static init(logService: LogDaoService) {
     this.logService = logService;
     if (Logger.queue.length) {
       Logger.addToQueue();

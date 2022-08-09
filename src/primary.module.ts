@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { ConfigModule } from './config.module';
 import { ConfigService } from './config.service';
-import { DatabaseModule } from './modules/dto/dto.modules';
+import { DatabaseModule } from './modules/dao/dao.modules';
 
 @Module({
   imports: [

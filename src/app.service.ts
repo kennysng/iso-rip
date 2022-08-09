@@ -8,8 +8,8 @@ import { Album } from './models/album.model';
 import { CD } from './models/cd.model';
 import { TaskStatus } from './models/task.model';
 import { Track } from './models/track.model';
-import { AlbumDtoService } from './modules/dto/album.service';
-import { TaskDtoService } from './modules/dto/task.service';
+import { AlbumDaoService } from './modules/dao/album.service';
+import { TaskDaoService } from './modules/dao/task.service';
 
 @Injectable()
 export class AppService {
@@ -23,8 +23,8 @@ export class AppService {
 
   constructor(
     private readonly config: ConfigService,
-    private readonly albumDtoService: AlbumDtoService,
-    private readonly taskDtoService: TaskDtoService,
+    private readonly albumDaoService: AlbumDaoService,
+    private readonly taskDaoService: TaskDaoService,
   ) {}
 
   @Cron('0 0 * * *')
@@ -46,7 +46,7 @@ export class AppService {
         const result: Album[] = [];
         for (const albumName of albums) {
           try {
-            let album = await this.albumDtoService.findOne({
+            let album = await this.albumDaoService.findOne({
               where: { name: albumName },
             });
             if (album && !album.rescan) continue;
@@ -84,7 +84,7 @@ export class AppService {
           }
         }
 
-        await this.albumDtoService.update(result);
+        await this.albumDaoService.update(result);
       } finally {
         this.isScanning = false;
       }
@@ -98,7 +98,7 @@ export class AppService {
         this.isRipping = true;
 
         while (true) {
-          const pending = await this.taskDtoService.findOne({
+          const pending = await this.taskDaoService.findOne({
             where: { status: TaskStatus.pending },
             include: [Album, CD, Track],
           });
